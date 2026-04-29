@@ -1,0 +1,25 @@
+# Core
+langchain==0.2.16
+langchain-community==0.2.16
+langchain-mistralai==0.1.13
+
+# PDF
+pymupdf==1.24.9
+
+# Embeddings
+sentence-transformers==3.0.1
+faiss-cpu==1.8.0
+
+# Retrieval
+rank-bm25==0.2.2
+
+# LLM
+mistralai==1.0.3
+ollama==0.3.3
+
+# UI
+streamlit==1.38.0
+
+# Utils
+python-dotenv==1.0.1
+pydantic==2.8.2
