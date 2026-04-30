@@ -7,7 +7,7 @@ langchain-mistralai==0.2.10
 pymupdf==1.25.5
 
 # Embeddings
-sentence-transformers==3.4.1
+# sentence-transformers==3.4.1
 faiss-cpu==1.9.0.post1
 
 # Retrieval

@@ -2,15 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Install CPU-only PyTorch first to avoid CUDA packages
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# Install remaining dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install fastapi uvicorn python-multipart
+RUN pip install --no-cache-dir fastapi uvicorn python-multipart
 
-# Copy project
 COPY . .
-
-# Create data directories
 RUN mkdir -p data/uploads data/vectorstore logs
 
 EXPOSE 8000
