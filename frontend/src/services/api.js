@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://13.62.194.160:8000";
+const API_BASE_URL = "http://ask-my-pdf.duckdns.org/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
