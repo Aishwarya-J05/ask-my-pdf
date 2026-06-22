@@ -15,7 +15,7 @@
 A production-grade Retrieval-Augmented Generation (RAG) system...
 A production-grade Retrieval-Augmented Generation (RAG) system that lets you have natural language conversations with your PDF documents. Built with a FastAPI backend, React frontend, and deployed on AWS EC2 with Docker.
 
-**Live Demo:** [http://ask-my-pdf.duckdns.org/](https://ask-my-pdf.duckdns.org/)
+**Live Demo:** https://ask-my-pdf.duckdns.org/
 
 
 ---
