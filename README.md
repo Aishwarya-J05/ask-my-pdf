@@ -10,13 +10,11 @@
 [![LangChain](https://img.shields.io/badge/LangChain-0.3-1C3C3C?style=flat&logo=chainlink&logoColor=white)](https://langchain.com)
 [![Mistral](https://img.shields.io/badge/Mistral_AI-API-FF7000?style=flat&logo=mistral&logoColor=white)](https://mistral.ai)
 [![HuggingFace](https://img.shields.io/badge/HuggingFace-BGE_Embeddings-FFD21E?style=flat&logo=huggingface&logoColor=black)](https://huggingface.co)
-[![Live](https://img.shields.io/badge/Live-Demo-22c55e?style=flat&logo=googlechrome&logoColor=white)](http://ask-my-pdf.duckdns.org)
+[![Live](https://img.shields.io/badge/Live-Demo-22c55e?style=flat&logo=googlechrome&logoColor=white)](https://ask-my-pdf.duckdns.org)
 
-A production-grade Retrieval-Augmented Generation (RAG) system...
-A production-grade Retrieval-Augmented Generation (RAG) system that lets you have natural language conversations with your PDF documents. Built with a FastAPI backend, React frontend, and deployed on AWS EC2 with Docker.
+A production-grade Retrieval-Augmented Generation (RAG) system that lets you have natural language conversations with your PDF documents. Built with a FastAPI backend, React frontend, and deployed on AWS EC2 with Docker, Nginx, and HTTPS via Let's Encrypt.
 
-**Live Demo:** https://ask-my-pdf.duckdns.org/
-
+**Live Demo:** https://ask-my-pdf.duckdns.org
 
 ---
 
@@ -29,7 +27,7 @@ A production-grade Retrieval-Augmented Generation (RAG) system that lets you hav
 - **Dual LLM Backend** — Supports Mistral API (cloud) and Ollama (fully offline) via a single config flag
 - **ChatGPT-style UI** — Dark themed React frontend with drag-and-drop PDF upload
 - **Anti-Hallucination** — LLM is strictly instructed to answer only from retrieved context
-- **Production Deployment** — Dockerized and running on AWS EC2 with Elastic IP
+- **Production Deployment** — Dockerized on AWS EC2 with Elastic IP, Nginx reverse proxy, and SSL/HTTPS
 
 ---
 
@@ -38,7 +36,8 @@ A production-grade Retrieval-Augmented Generation (RAG) system that lets you hav
 ```
 User Browser (React)
         ↓
-   Nginx (port 80)
+   Nginx (port 443 — HTTPS / Let's Encrypt SSL)
+   HTTP → HTTPS redirect on port 80
         ↓
  ┌──────────────────────────────────┐
  │         FastAPI Backend          │
@@ -60,7 +59,7 @@ User Browser (React)
         ↓
    Docker Compose
         ↓
-   AWS EC2 t3.micro
+   AWS EC2 t3.micro (Elastic IP)
 ```
 
 ---
@@ -78,9 +77,10 @@ User Browser (React)
 | Keyword Search | BM25 (rank-bm25) |
 | LLM (Cloud) | Mistral API (mistral-small-latest) |
 | LLM (Offline) | Ollama (Mistral 7B) |
-| Serving | Nginx reverse proxy |
+| Serving | Nginx reverse proxy + SSL termination |
+| TLS | Let's Encrypt via Certbot |
 | Containerization | Docker + Docker Compose |
-| Deployment | AWS EC2 t3.micro |
+| Deployment | AWS EC2 t3.micro + Elastic IP |
 
 ---
 
@@ -136,7 +136,7 @@ ask-my-pdf/
 │   └── src/
 │       ├── components/      # Chat UI components
 │       ├── hooks/           # useChat state management
-│       └── services/        # API client
+│       └── services/        # API client (api.js)
 ├── data/
 │   ├── uploads/             # Temporary PDF storage
 │   └── vectorstore/         # Persisted FAISS indexes
@@ -214,28 +214,67 @@ Frontend served at port 80, backend at port 8000.
 
 ---
 
-## AWS EC2 Deployment
+## AWS EC2 Deployment (with HTTPS)
+
+### 1. Launch Instance
+- Instance type: `t3.micro` (Ubuntu 22.04)
+- Assign an **Elastic IP** to avoid IP changes on restart
+- Security group inbound rules: `22` (SSH), `80` (HTTP), `443` (HTTPS)
+- Do **not** expose port 8000 publicly — backend traffic routes through Nginx
+
+### 2. Install Dependencies
 
 ```bash
-# 1. Launch t3.micro Ubuntu 22.04 instance
-# 2. Open ports: 22, 80, 8000 in security group
-# 3. SSH into instance
+ssh -i your-key.pem ubuntu@YOUR_ELASTIC_IP
 
-ssh -i your-key.pem ubuntu@YOUR_EC2_IP
-
-# 4. Install Docker
-sudo apt update && sudo apt install docker.io docker-compose -y
+sudo apt update && sudo apt install docker.io docker-compose nginx certbot python3-certbot-nginx -y
 sudo usermod -aG docker ubuntu
 newgrp docker
+```
 
-# 5. Clone and run
+### 3. Deploy Application
+
+```bash
 git clone https://github.com/Aishwarya-J05/ask-my-pdf.git
 cd ask-my-pdf
-
-# 6. Set API key in docker-compose.yml environment section
-# 7. Deploy
+# Set MISTRAL_API_KEY in docker-compose.yml environment section
 docker compose up -d --build
 ```
+
+### 4. Configure Nginx
+
+```bash
+sudo tee /etc/nginx/sites-available/askpdf << 'EOF'
+server {
+    listen 80;
+    server_name your-domain.duckdns.org;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+EOF
+
+sudo ln -sf /etc/nginx/sites-available/askpdf /etc/nginx/sites-enabled/askpdf
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 5. Enable HTTPS with Let's Encrypt
+
+```bash
+sudo certbot --nginx -d your-domain.duckdns.org --non-interactive --agree-tos -m your@email.com
+```
+
+Certbot automatically updates the Nginx config and sets up auto-renewal. Certificate valid for 90 days, renewed automatically in the background.
 
 ---
 
@@ -251,7 +290,7 @@ docker compose up -d --build
 ### Example Query
 
 ```bash
-curl -X POST http://localhost:8000/query \
+curl -X POST https://ask-my-pdf.duckdns.org/api/query \
   -H "Content-Type: application/json" \
   -d '{"question": "What are the key findings?", "session_id": "abc123"}'
 ```
@@ -309,7 +348,6 @@ Zero infrastructure cost, no external service dependency, and sufficient perform
 
 ## Roadmap
 
-- [ ] HTTPS via SSL certificate
 - [ ] Re-ranking with cross-encoders (BGE-reranker)
 - [ ] HyDE (Hypothetical Document Embeddings) for improved retrieval
 - [ ] Async document processing with Celery + Redis
@@ -321,7 +359,7 @@ Zero infrastructure cost, no external service dependency, and sufficient perform
 ## Author
 
 **Aishwarya Joshi**
-AI/ML Engineer | BE Electronics & Communication Engineering (AI/ML Specialization)
+AI/ML Engineer | BE in Electronics and Communication Engineering
 
 - GitHub: [@Aishwarya-J05](https://github.com/Aishwarya-J05)
 - LinkedIn: [aishwaryajoshiaiml](https://linkedin.com/in/aishwaryajoshiaiml)
